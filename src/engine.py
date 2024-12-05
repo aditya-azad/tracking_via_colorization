@@ -12,7 +12,14 @@ import logging
 import tqdm
 import torch
 from .transforms import OneHotEncoding, ConvertChannel, QuantizeAB, ToNumpy
-from torchvision.transforms import ToTensor, Resize, Grayscale, Compose, Lambda, Normalize
+from torchvision.transforms import (
+    ToTensor,
+    Resize,
+    Grayscale,
+    Compose,
+    Lambda,
+    Normalize,
+)
 from sklearn.utils import shuffle
 from PIL import Image
 from matplotlib import pyplot as plt
@@ -26,7 +33,9 @@ if config.WANDB:
     try:
         import wandb
     except ModuleNotFoundError:
-        logger.error(f"wandb not found install wandb and add api keys to env and rerun, turning sync off for now")
+        logger.error(
+            f"wandb not found install wandb and add api keys to env and rerun, turning sync off for now"
+        )
         config.WANDB = False
 
 
@@ -37,14 +46,16 @@ class Engine:
 
         # model
         self.mode = mode
-        self.model = net.get_colorization_network(config.BACKBONE,config.HEAD_NETWORK_VERSION)
+        self.model = net.get_colorization_network(
+            config.BACKBONE, config.HEAD_NETWORK_VERSION
+        )
         self.model.to(config.DEVICE)
         self.initial_epoch = 1
         if config.RESUME:
             if os.path.isfile(config.MODEL_PATH):
                 checkpoint = torch.load(config.MODEL_PATH)
                 self.model.load_state_dict(checkpoint["state_dict"])
-                self.initial_epoch = int(checkpoint["epoch"])+1
+                self.initial_epoch = int(checkpoint["epoch"]) + 1
                 print(f"loaded model {config.MODEL_PATH}, epochs {self.initial_epoch}")
             else:
                 self.logger.error(f"Error loading file not found {config.MODEL_PATH}")
@@ -57,13 +68,18 @@ class Engine:
 
         # wandb
         if config.WANDB:
-            exp_id = ''
+            exp_id = ""
             for ch in config.EXPERIMENT_NAME:
-                exp_id += ch if ch.isalnum() else ''
+                exp_id += ch if ch.isalnum() else ""
             self.logger.info(f"wandb experiment ID {exp_id}")
-            wandb.init(project=config.PROJECT_NAME, name=config.EXPERIMENT_NAME,
-                       config=config.get_config_dict(config), resume=config.RESUME, id=exp_id,
-                       dir=config.WANDB_LOG_ROOT)
+            wandb.init(
+                project=config.PROJECT_NAME,
+                name=config.EXPERIMENT_NAME,
+                config=config.get_config_dict(config),
+                resume=config.RESUME,
+                id=exp_id,
+                dir=config.WANDB_LOG_ROOT,
+            )
             wandb.watch(self.model)
             config.MODEL_LOGGING = wandb.run.dir
 
@@ -76,16 +92,18 @@ class Engine:
     @staticmethod
     def get_optimizer(model, name):
         optimizers = {
-            "Adam": {"instance": torch.optim.Adam,
-                     "params": {"lr": config.BASE_LR}},
+            "Adam": {"instance": torch.optim.Adam, "params": {"lr": config.BASE_LR}},
+            "SGD": {
+                "instance": torch.optim.SGD,
+                "params": {"lr": config.BASE_LR, "momentum": config.LEARNING_MOMENTUM},
+            },
+        }
 
-            "SGD": {"instance": torch.optim.SGD,
-                    "params": {"lr": config.BASE_LR,
-                               "momentum": config.LEARNING_MOMENTUM}}}
-        
         optimizer = optimizers.get(name, None)
         if optimizer:
-            my_optimizer = optimizer["instance"](model.parameters(), **optimizer["params"])
+            my_optimizer = optimizer["instance"](
+                model.parameters(), **optimizer["params"]
+            )
         else:
             raise KeyError(f"Available optimizers {optimizer.keys()}")
         return my_optimizer
@@ -101,22 +119,33 @@ class Engine:
     @staticmethod
     def get_learning_scheduler(name, optimizer, **kwargs):
         print("warning hard coded lambda")
-        schedulers = {"LambdaLR": torch.optim.lr_scheduler.LambdaLR(optimizer,
-                                                                    lr_lambda=lambda epoch: 1 if epoch < 1000 else 0.1)}
+        schedulers = {
+            "LambdaLR": torch.optim.lr_scheduler.LambdaLR(
+                optimizer, lr_lambda=lambda epoch: 1 if epoch < 1000 else 0.1
+            )
+        }
         my_scheduler = schedulers.get(name, None)
         if not my_scheduler:
-            raise KeyError(f"{name} not found, Available schedulers {schedulers.keys()}")
+            raise KeyError(
+                f"{name} not found, Available schedulers {schedulers.keys()}"
+            )
         return my_scheduler
 
     @staticmethod
     def get_data_loader(data_config, transforms=None):
-        data_loader = get_data_loader(data_config.DATASET, data_root=data_config.DATA_ROOT,
-                                      batch_size=data_config.BATCH_SIZE,
-                                      shuffle=data_config.SHUFFLE, transforms=transforms,
-                                      batch_per_video=data_config.BATCH_PER_VIDEO,
-                                      reference_frames=data_config.REFERENCE_FRAMES,
-                                      max_batches=data_config.MAX_BATCHES,
-                                      fps=data_config.VIDEO_FPS, skip_initial=data_config.SKIP_INITIAL,categories=data_config.CATEGORIES)
+        data_loader = get_data_loader(
+            data_config.DATASET,
+            data_root=data_config.DATA_ROOT,
+            batch_size=data_config.BATCH_SIZE,
+            shuffle=data_config.SHUFFLE,
+            transforms=transforms,
+            batch_per_video=data_config.BATCH_PER_VIDEO,
+            reference_frames=data_config.REFERENCE_FRAMES,
+            max_batches=data_config.MAX_BATCHES,
+            fps=data_config.VIDEO_FPS,
+            skip_initial=data_config.SKIP_INITIAL,
+            categories=data_config.CATEGORIES,
+        )
         return data_loader
 
     def visualize(self):
@@ -128,7 +157,7 @@ class TrainEngine(Engine):
         super(TrainEngine, self).__init__(mode="train")
         # model
         self.model.train()
-        
+
         # colorisation
         self.kmeans = None
         self.kmeans_refit = config.KMEANS_REFIT
@@ -138,6 +167,7 @@ class TrainEngine(Engine):
 
         elif os.path.isfile(config.KMEANS_FILE):
             from .kmeans import KMeansCluster
+
             try:
                 with open(config.KMEANS_FILE, "rb") as f:
                     self.kmeans = pickle.load(f)
@@ -148,22 +178,27 @@ class TrainEngine(Engine):
             raise Exception(f"Error in getting kmeans clustering {config.KMEANS_FILE}")
 
         # dataset
-#         transforms = self.get_transforms(self.kmeans)
+        #         transforms = self.get_transforms(self.kmeans)
         transforms = None
         if not os.path.isdir(config.TrainData.DATA_ROOT):
-            raise NotADirectoryError(f"data directory {config.TrainData.DATA_ROOT} does not exist")
+            raise NotADirectoryError(
+                f"data directory {config.TrainData.DATA_ROOT} does not exist"
+            )
         self.train_data_loader = self.get_data_loader(config.TrainData, transforms)
 
         if not os.path.isdir(config.TestData.DATA_ROOT):
-            raise NotADirectoryError(f"data directory {config.TestData.DATA_ROOT} does not exist")
+            raise NotADirectoryError(
+                f"data directory {config.TestData.DATA_ROOT} does not exist"
+            )
         self.test_data_loader = self.get_data_loader(config.TestData, transforms)
 
         # training
         self.optimizer = Engine.get_optimizer(self.model, config.OPTIMIZER)
         self.scheduler = None
         if config.LEARNING_SCHEDULER:
-            self.scheduler = Engine.get_learning_scheduler(config.LEARNING_SCHEDULER, self.optimizer,
-                                                           lr_lambda=config.LR_LAMBDA)
+            self.scheduler = Engine.get_learning_scheduler(
+                config.LEARNING_SCHEDULER, self.optimizer, lr_lambda=config.LR_LAMBDA
+            )
 
     def color_clustering(self):
         transforms = Compose([ConvertChannel()])
@@ -188,19 +223,46 @@ class TrainEngine(Engine):
     @staticmethod
     def get_transforms(kmeans):
         clusters = kmeans.kmeans.n_clusters
-        _transform_colorisation = Compose([Resize((32, 32)), ToNumpy(), ConvertChannel(),
-                                           QuantizeAB(kmeans), OneHotEncoding(clusters),
-                                           ToTensor()])
+        _transform_colorisation = Compose(
+            [
+                Resize((32, 32)),
+                ToNumpy(),
+                ConvertChannel(),
+                QuantizeAB(kmeans),
+                OneHotEncoding(clusters),
+                ToTensor(),
+            ]
+        )
         transform_colorisation = Compose(
-            [Lambda(lambda batch: torch.stack([_transform_colorisation(im) for im in batch]))])
+            [
+                Lambda(
+                    lambda batch: torch.stack(
+                        [_transform_colorisation(im) for im in batch]
+                    )
+                )
+            ]
+        )
 
         _transform_training = Compose(
-            [Resize((256, 256)), Grayscale(), ToTensor(), Normalize(mean=config.IMAGE_MEAN, std=config.IMAGE_STD)])
+            [
+                Resize((256, 256)),
+                Grayscale(),
+                ToTensor(),
+                Normalize(mean=config.IMAGE_MEAN, std=config.IMAGE_STD),
+            ]
+        )
         transform_training = Compose(
-            [Lambda(lambda batch: torch.stack([_transform_training(im) for im in batch]))])
+            [
+                Lambda(
+                    lambda batch: torch.stack([_transform_training(im) for im in batch])
+                )
+            ]
+        )
 
         _transform_testing = Compose([Resize((256, 256)), ToNumpy(), ConvertChannel()])
-        transform_testing = Compose([Lambda(lambda batch: [_transform_testing(im) for im in batch])])
+        transform_testing = Compose(
+            [Lambda(lambda batch: [_transform_testing(im) for im in batch])]
+        )
 
         return [transform_training, transform_colorisation, transform_testing]
 
@@ -211,15 +273,18 @@ class TrainEngine(Engine):
         if isinstance(quantized_image, torch.Tensor):
             quantized_image = quantized_image.to("cpu").numpy()
 
-        reconstructed_ab = (self.kmeans.recreate_image(quantized_image.flatten(), 32, 32) * 255).astype("uint8")
+        reconstructed_ab = (
+            self.kmeans.recreate_image(quantized_image.flatten(), 32, 32) * 255
+        ).astype("uint8")
         orignal_image = Image.fromarray(orignal_image, mode="LAB")
 
         reduced_orignal = orignal_image.copy()
         reduced_orignal_l = np.array(reduced_orignal.resize((32, 32)))[:, :, 0]
 
         # print("reduced_orignal_l l",reduced_orignal_l.shape)
-        reconstructed = np.concatenate([np.expand_dims(reduced_orignal_l, axis=-1), reconstructed_ab]
-                                       , axis=-1)
+        reconstructed = np.concatenate(
+            [np.expand_dims(reduced_orignal_l, axis=-1), reconstructed_ab], axis=-1
+        )
 
         reconstructed = Image.fromarray(reconstructed, mode="LAB")
 
@@ -227,11 +292,15 @@ class TrainEngine(Engine):
         upsampled_ab = upsampled[:, :, 1:]
 
         orignal_l = np.array(orignal_image)[:, :, 0].copy()
-        upsampled_reconstructed = np.concatenate([np.expand_dims(orignal_l, axis=-1), upsampled_ab], axis=-1)
+        upsampled_reconstructed = np.concatenate(
+            [np.expand_dims(orignal_l, axis=-1), upsampled_ab], axis=-1
+        )
 
-        return [cv2.cvtColor(np.array(orignal_image).astype("uint8"), cv2.COLOR_Lab2RGB),
-                cv2.cvtColor(np.array(reconstructed).astype("uint8"), cv2.COLOR_Lab2RGB),
-                cv2.cvtColor(upsampled_reconstructed.astype("uint8"), cv2.COLOR_Lab2RGB)]
+        return [
+            cv2.cvtColor(np.array(orignal_image).astype("uint8"), cv2.COLOR_Lab2RGB),
+            cv2.cvtColor(np.array(reconstructed).astype("uint8"), cv2.COLOR_Lab2RGB),
+            cv2.cvtColor(upsampled_reconstructed.astype("uint8"), cv2.COLOR_Lab2RGB),
+        ]
 
     def show(self, image, i=0, cmap=None):
         plt.figure(num=i)
@@ -241,7 +310,7 @@ class TrainEngine(Engine):
     def run(self):
         transforms = self.get_transforms(self.kmeans)
         step = 0
-        
+
         for epoch in range(self.initial_epoch, config.EPOCHS):
             data_loader = tqdm.tqdm(self.train_data_loader)
 
@@ -259,9 +328,14 @@ class TrainEngine(Engine):
                 training_batch, labels_batch, testing_batch = data
                 training_batch = training_batch.to(config.DEVICE)
                 labels_batch = labels_batch.to(config.DEVICE)
-                similarity_matrix = self.model(training_batch, config.TrainData.REFERENCE_FRAMES)
-                predicted_colors, true_colors = self.model.proxy_task(similarity_matrix, labels_batch,
-                                                                      num_ref=config.TrainData.REFERENCE_FRAMES)
+                similarity_matrix = self.model(
+                    training_batch, config.TrainData.REFERENCE_FRAMES
+                )
+                predicted_colors, true_colors = self.model.proxy_task(
+                    similarity_matrix,
+                    labels_batch,
+                    num_ref=config.TrainData.REFERENCE_FRAMES,
+                )
                 # print(predicted_colors.shape,true_colors.shape)
                 predicted = predicted_colors.reshape(-1, 16)
                 target = torch.argmax(true_colors.reshape(-1, 16), dim=-1)
@@ -272,18 +346,32 @@ class TrainEngine(Engine):
                 self.optimizer.step()
 
                 data_loader.set_description(f"  loss:{loss} ")
-                if epoch % config.VISUALIZATION_EPOCH == 0 and visual_count <= config.VISUALIZATION_COUNT:
-                    predicted_colors = torch.argmax(predicted_colors[0].permute([1,2,0]), dim=-1)
+                if (
+                    epoch % config.VISUALIZATION_EPOCH == 0
+                    and visual_count <= config.VISUALIZATION_COUNT
+                ):
+                    predicted_colors = torch.argmax(
+                        predicted_colors[0].permute([1, 2, 0]), dim=-1
+                    )
                     # print(true_colors.shape)
-                    true_colors = torch.argmax(true_colors[0].permute([1,2,0]), dim=-1)
-                    
-                    self.logger.debug(f"reconstruct image predicted {predicted_colors.shape}, true {true_colors.shape}")
+                    true_colors = torch.argmax(
+                        true_colors[0].permute([1, 2, 0]), dim=-1
+                    )
+
+                    self.logger.debug(
+                        f"reconstruct image predicted {predicted_colors.shape}, true {true_colors.shape}"
+                    )
 
                     orignal_image = testing_batch[config.TrainData.REFERENCE_FRAMES]
-                    orignal_image, reconstructed, upsampled_reconstructed = self.reconstruct_image(predicted_colors,
-                                                                                                   orignal_image)
-                    refrence_image = testing_batch[config.TrainData.REFERENCE_FRAMES-1]
-                    refrence_image = cv2.cvtColor(np.array(refrence_image).astype("uint8"), cv2.COLOR_Lab2RGB)
+                    orignal_image, reconstructed, upsampled_reconstructed = (
+                        self.reconstruct_image(predicted_colors, orignal_image)
+                    )
+                    refrence_image = testing_batch[
+                        config.TrainData.REFERENCE_FRAMES - 1
+                    ]
+                    refrence_image = cv2.cvtColor(
+                        np.array(refrence_image).astype("uint8"), cv2.COLOR_Lab2RGB
+                    )
                     # self.show(orignal_image,0)
                     # self.show(reconstructed,1)
                     # self.show(upsampled_reconstructed,2)
@@ -294,19 +382,27 @@ class TrainEngine(Engine):
                     #     self.show(img,5+i)
 
                     if config.WANDB:
-                        examples.extend([wandb.Image(refrence_image,caption="Refrence frame"),
-                                         wandb.Image(orignal_image, caption=f"orignal image {batch_index}"),
-                                         wandb.Image(upsampled_reconstructed,
-                                                     caption=f"predicted image {batch_index}")])
+                        examples.extend(
+                            [
+                                wandb.Image(refrence_image, caption="Refrence frame"),
+                                wandb.Image(
+                                    orignal_image,
+                                    caption=f"orignal image {batch_index}",
+                                ),
+                                wandb.Image(
+                                    upsampled_reconstructed,
+                                    caption=f"predicted image {batch_index}",
+                                ),
+                            ]
+                        )
                         logs["training visualization"] = examples
-
 
                     visual_count += 1
             data_loader.total = batch_index
             print(f"epoch {epoch}, loss: {epoch_loss / (batch_index + 1)}")
-            logs.update({"epoch": epoch,
-                         "training loss": epoch_loss / (batch_index + 1)
-                         })
+            logs.update(
+                {"epoch": epoch, "training loss": epoch_loss / (batch_index + 1)}
+            )
 
             if config.WANDB:
                 #                 print("logging",step)
@@ -319,5 +415,7 @@ class TrainEngine(Engine):
                 logs["lr"] = self.scheduler.get_last_lr()[0]
 
             if epoch % config.SAVE_EPOCH == 0:
-                torch.save({"state_dict": self.model.state_dict(), "epoch": epoch},
-                           os.path.join(config.MODEL_LOGGING, f'model_{epoch}.pt'))
+                torch.save(
+                    {"state_dict": self.model.state_dict(), "epoch": epoch},
+                    os.path.join(config.MODEL_LOGGING, f"model_{epoch}.pt"),
+                )

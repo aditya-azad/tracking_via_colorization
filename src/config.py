@@ -93,7 +93,7 @@ class Config:
     LOG_FILE = "run.log"
     LOGGER = logging.getLogger(f"{PROJECT_NAME}_{EXPERIMENT_NAME}")
 
-    WANDB = False
+    WANDB = True
     WANDB_LOG_ROOT = "./logs/model"
     __WANDB_KEY = os.getenv("WANDB_KEY")
 
@@ -109,6 +109,7 @@ class Config:
                     os.makedirs(self.WANDB_LOG_ROOT)
             print(f"changing model logging from {Config.MODEL_LOGGING} to wandb root {Config.WANDB_LOG_ROOT}/wandb")
             Config.MODEL_LOGGING = os.path.join(self.WANDB_LOG_ROOT,"wandb")
+            os.makedirs(Config.MODEL_LOGGING, exist_ok=True)
             config_dict = self.get_config_dict(Config._config)
             Config.LOGGER.info(f"Experiment Config \n {config_dict}")
             self.display2(config_dict)

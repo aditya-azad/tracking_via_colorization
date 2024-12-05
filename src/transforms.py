@@ -54,6 +54,7 @@ class ConvertChannel:
         assert self.in_channel in channels, f"Channel must be in {channels}"
 
     def __call__(self, sample):
+        sample = np.array(sample)
         logger.debug(sample.shape)
         if sample.ndim == 4:
             output_samples = []

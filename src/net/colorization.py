@@ -131,7 +131,7 @@ class Colorization(nn.Module):
         num_samples = num_ref + 1
         # embeddings = embeddings.reshape(-1, num_samples, channels, h * w)
         stacking = []
-        end = (num_samples // 2 + 1) * -1
+        end = (num_samples // 2 + 2) * -1
         start = 0
 
         for i in range(num_samples):
@@ -172,7 +172,7 @@ class Colorization(nn.Module):
         batch, num_classes, h, w = labels.shape
 
         stacking = []
-        end = (num_samples // 2 + 1) * -1
+        end = (num_samples // 2 + 2) * -1
         start = 0
         for i in range(num_samples):
             start += 1

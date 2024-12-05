@@ -14,7 +14,7 @@ class Config:
 
     # TRAINING CONFIG
     RESUME = False
-    MODEL_PATH = ""
+    MODEL_PATH = "./models"
     LOSS = "cross_entropy"
     DEVICE = "cuda"
     GPU_INDEX = 0
@@ -43,7 +43,7 @@ class Config:
         BASE_DATA_ROOT = "./dataset/tracking/"
         CATEGORIES = None
         DATASET = "davis"
-        DATA_ROOT = os.path.join(BASE_DATA_ROOT, DATASET, "videos/")
+        DATA_ROOT = os.path.join(BASE_DATA_ROOT, DATASET, "train_2017/JPEGImages/480p")
         BATCH_SIZE = 32 # 32 x 4
         SHUFFLE = True
         BATCH_PER_VIDEO = 5
@@ -71,7 +71,7 @@ class Config:
         BASE_DATA_ROOT = "./dataset/tracking/"
         DATASET = "davis"
         CATEGORIES = None
-        DATA_ROOT = os.path.join(BASE_DATA_ROOT, DATASET, "training")
+        DATA_ROOT = os.path.join(BASE_DATA_ROOT, DATASET, "train_2017/JPEGImages/480p")
         BATCH_SIZE = 1
         SHUFFLE = False
         BATCH_PER_VIDEO = 1
@@ -81,12 +81,12 @@ class Config:
         REFERENCE_FRAMES = 0  # num of reference for colorization task
 
     # COLORIZATION
-    KMEANS_FILE = None
+    KMEANS_FILE = "./models/kmeans.pkl"
     CLUSTERS = 16
     CHANNELS = 'lab'
     QUANTIZE_CHANNELS = (1,2)
     KMEANS_SAMPLES = 100000
-    KMEANS_REFIT = False
+    KMEANS_REFIT = True
 
     # LOGGING
     LOG_ROOT = "./logs"
@@ -113,7 +113,8 @@ class Config:
             Config.LOGGER.info(f"Experiment Config \n {config_dict}")
             self.display2(config_dict)
             #set wandb key
-            os.environ['WANDB_API_KEY'] = Config.__WANDB_KEY
+            if self.WANDB:
+                os.environ['WANDB_API_KEY'] = Config.__WANDB_KEY
             
     def display2(self,config):
         for k,v in config.items():

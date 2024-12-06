@@ -5,7 +5,7 @@ import logging
 class Config:
     # EXPERIMENT CONFIG
     PROJECT_NAME = "color-net"
-    EXPERIMENT_NAME = "color-net_1.7.2"
+    EXPERIMENT_NAME = "color-net-2"
     COMMENTS = "using dataset youtube only one category"
 
     # MODEL CONFIG
